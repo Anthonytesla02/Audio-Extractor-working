@@ -2,14 +2,38 @@ import os
 import re
 import time
 import uuid
-from flask import Flask, render_template, request, jsonify, send_file
+import logging
+from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase
+from werkzeug.middleware.proxy_fix import ProxyFix
 import yt_dlp
+import io
+
+logging.basicConfig(level=logging.DEBUG)
+
+class Base(DeclarativeBase):
+    pass
+
+db = SQLAlchemy(model_class=Base)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+db.init_app(app)
 
 DOWNLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'downloads')
 os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+
+with app.app_context():
+    import models
+    db.create_all()
 
 def is_valid_youtube_url(url):
     youtube_regex = re.compile(
@@ -32,6 +56,44 @@ def clean_old_files():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/library')
+def library():
+    return render_template('library.html')
+
+@app.route('/api/songs')
+def get_songs():
+    from models import Song
+    songs = Song.query.order_by(Song.created_at.desc()).all()
+    return jsonify([song.to_dict() for song in songs])
+
+@app.route('/api/songs/<int:song_id>')
+def get_song(song_id):
+    from models import Song
+    song = Song.query.get_or_404(song_id)
+    return jsonify(song.to_dict())
+
+@app.route('/api/songs/<int:song_id>/audio')
+def stream_song(song_id):
+    from models import Song
+    song = Song.query.get_or_404(song_id)
+    return Response(
+        io.BytesIO(song.audio_data),
+        mimetype='audio/mpeg',
+        headers={
+            'Content-Length': str(len(song.audio_data)),
+            'Accept-Ranges': 'bytes',
+            'Cache-Control': 'public, max-age=31536000'
+        }
+    )
+
+@app.route('/api/songs/<int:song_id>', methods=['DELETE'])
+def delete_song(song_id):
+    from models import Song
+    song = Song.query.get_or_404(song_id)
+    db.session.delete(song)
+    db.session.commit()
+    return jsonify({'success': True})
 
 @app.route('/convert', methods=['POST'])
 def convert():
@@ -67,6 +129,7 @@ def convert():
             if info is None:
                 return jsonify({'success': False, 'error': 'Could not extract video information'})
             title = info.get('title', 'audio')
+            artist = info.get('uploader', 'Unknown Artist')
             duration = info.get('duration', 0)
         
         mp3_path = output_path + '.mp3'
@@ -84,8 +147,10 @@ def convert():
                 'success': True,
                 'file_id': file_id,
                 'title': title,
+                'artist': artist,
                 'safe_title': safe_title,
-                'duration': duration
+                'duration': duration,
+                'youtube_url': url
             })
         else:
             return jsonify({'success': False, 'error': 'Failed to convert audio'})
@@ -100,6 +165,46 @@ def convert():
             return jsonify({'success': False, 'error': 'Failed to download video. Please check the URL.'})
     except Exception as e:
         return jsonify({'success': False, 'error': f'An error occurred: {str(e)}'})
+
+@app.route('/save-to-library', methods=['POST'])
+def save_to_library():
+    from models import Song
+    
+    data = request.get_json()
+    file_id = data.get('file_id')
+    title = data.get('title', 'Unknown')
+    artist = data.get('artist', 'Unknown Artist')
+    duration = data.get('duration', 0)
+    youtube_url = data.get('youtube_url', '')
+    
+    if not file_id or not re.match(r'^[a-f0-9\-]+$', file_id):
+        return jsonify({'success': False, 'error': 'Invalid file ID'})
+    
+    mp3_path = os.path.join(DOWNLOAD_FOLDER, file_id + '.mp3')
+    
+    if not os.path.exists(mp3_path):
+        return jsonify({'success': False, 'error': 'File not found or expired'})
+    
+    try:
+        with open(mp3_path, 'rb') as f:
+            audio_data = f.read()
+        
+        song = Song(
+            title=title,
+            artist=artist,
+            duration=duration,
+            youtube_url=youtube_url,
+            audio_data=audio_data,
+            file_size=len(audio_data)
+        )
+        db.session.add(song)
+        db.session.commit()
+        
+        os.remove(mp3_path)
+        
+        return jsonify({'success': True, 'song': song.to_dict()})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Failed to save: {str(e)}'})
 
 @app.route('/download/<file_id>')
 def download(file_id):
