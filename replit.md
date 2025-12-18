@@ -1,14 +1,15 @@
-# MusicBox - Mobile Music Player
+# YouTube to MP3 API
 
 ## Overview
-A mobile-friendly music player app that allows users to download music from YouTube and save it to their personal library for offline playback.
+A REST API for converting YouTube videos to MP3 and managing a song library. Designed for deployment to Railway with a React frontend.
 
 ## Current State
-Fully functional mobile music player with:
+Fully functional REST API with:
 - YouTube URL extraction and MP3 conversion
-- Database storage for offline playback
-- Music library with playback controls
-- Mobile-first responsive design
+- Song library management with CRUD operations
+- Audio streaming endpoint
+- CORS enabled for React frontend integration
+- Consistent JSON response format
 
 ## Project Structure
 ```
@@ -16,9 +17,9 @@ Fully functional mobile music player with:
 ├── app.py              # Main Flask application with API endpoints
 ├── models.py           # SQLAlchemy Song model
 ├── main.py             # App entry point
-├── templates/
-│   ├── index.html      # Add Music page
-│   └── library.html    # Library and player page
+├── Procfile            # Railway deployment command
+├── railway.json        # Railway configuration
+├── requirements.txt    # Python dependencies
 ├── downloads/          # Temporary storage for conversion
 └── replit.md           # This file
 ```
@@ -31,30 +32,41 @@ gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
 
 ## Dependencies
 - Flask & Flask-SQLAlchemy - Web framework and ORM
+- Flask-CORS - Cross-origin support for React frontend
 - yt-dlp - YouTube audio extraction
 - psycopg2-binary - PostgreSQL adapter
 - gunicorn - Production WSGI server
 
-## Features
-1. **YouTube Extraction**: Paste a YouTube URL to extract audio
-2. **Save to Library**: Songs are saved to PostgreSQL database as binary data
-3. **Offline Playback**: Play saved songs anytime from your library
-4. **Music Player**: Full playback controls with progress bar, prev/next
-5. **Mobile-First UI**: Designed for mobile devices with bottom navigation
-
 ## API Endpoints
-- `GET /` - Add music page
-- `GET /library` - Library and player page
-- `POST /convert` - Extract audio from YouTube URL
-- `POST /save-to-library` - Save converted song to database
+- `GET /api/health` - Health check
+- `POST /api/convert` - Extract audio from YouTube URL
 - `GET /api/songs` - List all saved songs
+- `POST /api/songs` - Save converted song to library
+- `GET /api/songs/<id>` - Get single song details
 - `GET /api/songs/<id>/audio` - Stream song audio
 - `DELETE /api/songs/<id>` - Delete song from library
+- `GET /api/download/<file_id>` - Download converted file
+
+## Response Format
+All endpoints return consistent JSON:
+```json
+{
+  "success": true|false,
+  "data": {...} | null,
+  "message": "..." | null
+}
+```
+
+## Environment Variables
+- `DATABASE_URL` - PostgreSQL connection string
+- `SESSION_SECRET` - Secret key for sessions
+- `PORT` - Server port (set by Railway)
 
 ## Database
 Uses PostgreSQL to store songs with the following fields:
 - id, title, artist, duration, youtube_url, audio_data (binary), file_size, created_at
 
 ## Recent Changes
-- December 18, 2025: Transformed into mobile music player with library and offline playback
+- December 18, 2025: Converted to REST API for Railway deployment with React frontend support
+- December 18, 2025: Added CORS, consistent response format, health endpoint
 - December 17, 2025: Initial YouTube to MP3 converter
