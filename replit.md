@@ -1,39 +1,58 @@
-# MusicBox - Mobile Music Player
+# MusicBox - React Music Player
 
 ## Overview
-A mobile-friendly music player app that allows users to download music from YouTube and save it to their personal library for offline playback.
+A mobile-friendly music player app with a React frontend and Python Flask REST API backend. Users can download music from YouTube and save it to their personal library for offline playback.
 
-## Current State
-Fully functional mobile music player with:
-- YouTube URL extraction and MP3 conversion
-- Database storage for offline playback
-- Music library with playback controls
-- Mobile-first responsive design
+## Architecture
+
+### Frontend (React + Vite)
+- Located in `/client` directory
+- Runs on port 5000
+- Uses React Router for navigation
+- Proxy configuration to connect to backend API
+
+### Backend (Flask REST API)
+- Python Flask application with CORS enabled
+- Runs on port 8000
+- Ready for deployment to Render or similar platforms
+- Uses PostgreSQL database (compatible with Neon.tech)
 
 ## Project Structure
 ```
 /
-├── app.py              # Main Flask application with API endpoints
-├── models.py           # SQLAlchemy Song model
-├── main.py             # App entry point
-├── templates/
-│   ├── index.html      # Add Music page
-│   └── library.html    # Library and player page
-├── downloads/          # Temporary storage for conversion
-└── replit.md           # This file
+├── client/                  # React frontend
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── AddMusic.jsx    # YouTube URL input and conversion
+│   │   │   ├── Library.jsx     # Music library with player
+│   │   │   ├── Navigation.jsx  # Bottom navigation bar
+│   │   │   └── Player.jsx      # Audio player component
+│   │   ├── services/
+│   │   │   └── api.js          # API service layer
+│   │   ├── App.jsx             # Main app with routing
+│   │   ├── main.jsx            # Entry point
+│   │   └── index.css           # Global styles
+│   ├── vite.config.js          # Vite configuration with proxy
+│   └── package.json
+├── app.py                   # Flask REST API
+├── models.py                # SQLAlchemy Song model
+├── main.py                  # App entry point
+├── downloads/               # Temporary storage for conversion
+└── replit.md                # This file
 ```
 
-## How to Run
-The application runs on port 5000 via gunicorn:
-```bash
-gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
-```
+## API Endpoints
 
-## Dependencies
-- Flask & Flask-SQLAlchemy - Web framework and ORM
-- yt-dlp - YouTube audio extraction
-- psycopg2-binary - PostgreSQL adapter
-- gunicorn - Production WSGI server
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/songs` | List all songs |
+| GET | `/api/songs/:id` | Get single song |
+| GET | `/api/songs/:id/audio` | Stream song audio |
+| DELETE | `/api/songs/:id` | Delete song |
+| POST | `/convert` | Convert YouTube URL to MP3 |
+| POST | `/save-to-library` | Save converted song to library |
+| GET | `/download/:file_id` | Download converted file |
 
 ## Features
 1. **YouTube Extraction**: Paste a YouTube URL to extract audio
@@ -42,19 +61,36 @@ gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
 4. **Music Player**: Full playback controls with progress bar, prev/next
 5. **Mobile-First UI**: Designed for mobile devices with bottom navigation
 
-## API Endpoints
-- `GET /` - Add music page
-- `GET /library` - Library and player page
-- `POST /convert` - Extract audio from YouTube URL
-- `POST /save-to-library` - Save converted song to database
-- `GET /api/songs` - List all saved songs
-- `GET /api/songs/<id>/audio` - Stream song audio
-- `DELETE /api/songs/<id>` - Delete song from library
+## Environment Variables
 
-## Database
-Uses PostgreSQL to store songs with the following fields:
-- id, title, artist, duration, youtube_url, audio_data (binary), file_size, created_at
+### Backend (for Render deployment)
+- `DATABASE_URL` - PostgreSQL connection string (Neon.tech compatible)
+- `SESSION_SECRET` - Secret key for Flask sessions
+
+### Frontend (for production)
+- `VITE_API_URL` - Backend API URL (set to your Render backend URL)
+
+## Development
+
+### Local Development
+1. Backend runs on port 8000: `gunicorn --bind 0.0.0.0:8000 --reload main:app`
+2. Frontend runs on port 5000: `cd client && npm run dev`
+3. Vite proxies API calls to backend
+
+### Production Deployment
+
+#### Backend (Render)
+1. Deploy Flask app to Render
+2. Add PostgreSQL database (Render or Neon.tech)
+3. Set environment variables: `DATABASE_URL`, `SESSION_SECRET`
+
+#### Frontend
+1. Build: `cd client && npm run build`
+2. Set `VITE_API_URL` to your Render backend URL
+3. Deploy `client/dist` as static site
 
 ## Recent Changes
-- December 18, 2025: Transformed into mobile music player with library and offline playback
-- December 17, 2025: Initial YouTube to MP3 converter
+- Dec 2024: Converted from server-rendered templates to React SPA
+- Added CORS support for API
+- Created reusable React components
+- Implemented client-side audio player with React state management

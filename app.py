@@ -3,8 +3,9 @@ import re
 import time
 import uuid
 import logging
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, request, jsonify, send_file, Response
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 import yt_dlp
@@ -18,8 +19,10 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
+app.secret_key = os.environ.get("SESSION_SECRET")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+CORS(app, origins="*", supports_credentials=True)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
@@ -53,13 +56,9 @@ def clean_old_files():
         except:
             pass
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/library')
-def library():
-    return render_template('library.html')
+@app.route('/api/health')
+def health():
+    return jsonify({'status': 'ok'})
 
 @app.route('/api/songs')
 def get_songs():
@@ -75,16 +74,14 @@ def get_song(song_id):
 
 @app.route('/api/songs/<int:song_id>/audio')
 def stream_song(song_id):
+    from flask import send_file
     from models import Song
     song = Song.query.get_or_404(song_id)
-    return Response(
+    return send_file(
         io.BytesIO(song.audio_data),
         mimetype='audio/mpeg',
-        headers={
-            'Content-Length': str(len(song.audio_data)),
-            'Accept-Ranges': 'bytes',
-            'Cache-Control': 'public, max-age=31536000'
-        }
+        download_name=f"{song.title}.mp3",
+        as_attachment=False
     )
 
 @app.route('/api/songs/<int:song_id>', methods=['DELETE'])
@@ -227,4 +224,4 @@ def download(file_id):
     )
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=True)
